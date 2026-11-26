@@ -104,7 +104,7 @@ app.get('/api/badge/:token/status', asyncRoute(async (req, res) => {
       open: true,
       claimed: true,
       employee: emp ? { name: emp.name, department: emp.department } : null,
-      prize: prize ? { name: prize.name, unit: prize.unit } : null,
+      prize: prize ? { id: prize.id, name: prize.name, unit: prize.unit } : null,
     });
   }
   res.json({ open: true, claimed: false });
@@ -133,7 +133,7 @@ app.post('/api/badge/:token/preview', asyncRoute(async (req, res) => {
     const prevPrize = await getPrize(emp.prize_id);
     return res.status(409).json({
       error: 'employee_already_drawn',
-      prize: prevPrize ? { name: prevPrize.name, unit: prevPrize.unit } : null,
+      prize: prevPrize ? { id: prevPrize.id, name: prevPrize.name, unit: prevPrize.unit } : null,
     });
   }
 
@@ -141,7 +141,7 @@ app.post('/api/badge/:token/preview', asyncRoute(async (req, res) => {
   res.json({
     ok: true,
     employee: { emp_id: emp.emp_id, name: emp.name, department: emp.department, company: emp.company },
-    prize: { name: prize.name, unit: prize.unit },
+    prize: { id: prize.id, name: prize.name, unit: prize.unit },
     alreadyConfirmed: !!badge.claimed_by,
   });
 }));
@@ -164,11 +164,11 @@ app.post('/api/badge/:token/confirm', asyncRoute(async (req, res) => {
     name: emp ? emp.name : empId,
     department: emp ? emp.department : '',
     company: emp ? emp.company : '',
-    prize: { name: data.prize.name, unit: data.prize.unit },
+    prize: { id: data.prize.id, name: data.prize.name, unit: data.prize.unit },
     at: new Date().toISOString(),
   });
 
-  res.json({ ok: true, prize: { name: data.prize.name, unit: data.prize.unit } });
+  res.json({ ok: true, prize: { id: data.prize.id, name: data.prize.name, unit: data.prize.unit } });
 }));
 
 // ---------- Admin routes ----------

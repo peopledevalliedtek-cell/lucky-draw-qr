@@ -91,6 +91,10 @@
   }
   .trophy{ font-size:48px; }
   .prize-name{ font-size:26px; font-weight:800; color:var(--gold); margin:8px 0; }
+  .prize-photo{
+    width:140px; height:140px; object-fit:cover; border-radius:14px; margin:0 auto 10px;
+    display:block; border:2px solid rgba(212,175,55,0.5); box-shadow:0 6px 18px rgba(0,0,0,0.35);
+  }
   .note{ margin-top:16px; font-size:13px; opacity:.7; }
   .spin{
     width:50px; height:50px; border-radius:50%;
@@ -154,7 +158,7 @@
       </div>
       <div class="sub">ของรางวัลที่คุณจะได้รับ</div>
       <div class="prize-box">
-        <div class="trophy gift-hero" style="font-size:48px;">🎁</div>
+        <div class="trophy gift-hero" id="prevTrophy" style="font-size:48px;">🎁</div>
         <div class="prize-name" id="prevPrize"></div>
       </div>
       <button id="confirmBtn" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
@@ -169,7 +173,7 @@
         <div class="dept" id="doneDept"></div>
       </div>
       <div class="prize-box">
-        <div class="trophy">🏆</div>
+        <div class="trophy" id="doneTrophy">🏆</div>
         <div class="prize-name" id="donePrize"></div>
       </div>
       <div class="note" id="doneNote"></div>
@@ -202,8 +206,27 @@
     el('doneDept').textContent = employee ? (employee.department || '') : '';
     el('donePrize').textContent = prize ? (prize.name + (prize.unit ? ' (' + prize.unit + ')' : '')) : '-';
     el('doneNote').textContent = note || '';
+    setPrizeVisual('doneTrophy', prize, '🏆');
     show('stateDone');
     if (celebrate) confettiBurst();
+  }
+
+  // Shows the uploaded product photo for this prize (/static/images/prizes/<id>.jpg)
+  // if one exists; otherwise keeps the gift/trophy emoji already in the markup.
+  function setPrizeVisual(elId, prize, fallbackEmoji) {
+    const holder = el(elId);
+    if (!prize || !prize.id) { holder.textContent = fallbackEmoji; return; }
+    const img = new Image();
+    img.onload = () => {
+      holder.innerHTML = '';
+      const shown = document.createElement('img');
+      shown.className = 'prize-photo';
+      shown.src = img.src;
+      shown.alt = prize.name || '';
+      holder.appendChild(shown);
+    };
+    img.onerror = () => { holder.textContent = fallbackEmoji; };
+    img.src = '/static/images/prizes/' + encodeURIComponent(prize.id) + '.jpg';
   }
 
   // ---------- decorative background: gentle floating sparkles + gift boxes ----------
@@ -308,6 +331,7 @@
       el('prevName').textContent = data.employee.name;
       el('prevDept').textContent = [data.employee.department, data.employee.company].filter(Boolean).join(' · ');
       el('prevPrize').textContent = data.prize.name + (data.prize.unit ? ' (' + data.prize.unit + ')' : '');
+      setPrizeVisual('prevTrophy', data.prize, '🎁');
       show('statePreview');
     } catch (e) {
       el('submitBtn').disabled = false;
