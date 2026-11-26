@@ -7,16 +7,60 @@
 <style>
   :root{ --gold:#d4af37; --dark:#1a1033; --dark2:#2d1b4e; }
   *{box-sizing:border-box;}
+  html, body{ height:100%; }
   body{
     margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
     background: radial-gradient(circle at 50% 0%, var(--dark2), var(--dark));
     font-family:'Segoe UI', Tahoma, sans-serif; color:#fff; padding:24px;
+    position:relative; overflow:hidden;
   }
+
+  /* ---------- decorative background: floating sparkles + gift boxes ---------- */
+  .bg-deco{ position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
+  .spark{
+    position:absolute; bottom:-40px; font-size:18px; color:var(--gold);
+    opacity:.85; filter:drop-shadow(0 0 4px rgba(212,175,55,0.8));
+    animation: floatUp linear infinite;
+  }
+  .gift-float{
+    position:absolute; bottom:-60px; font-size:30px;
+    animation: floatUpGift linear infinite;
+    filter:drop-shadow(0 0 6px rgba(212,175,55,0.5));
+  }
+  @keyframes floatUp{
+    0%{ transform:translateY(0) rotate(0deg); opacity:0; }
+    10%{ opacity:1; }
+    90%{ opacity:1; }
+    100%{ transform:translateY(-110vh) rotate(360deg); opacity:0; }
+  }
+  @keyframes floatUpGift{
+    0%{ transform:translateY(0) rotate(-8deg) scale(.9); opacity:0; }
+    12%{ opacity:1; }
+    50%{ transform:translateY(-55vh) rotate(8deg) scale(1.05); }
+    88%{ opacity:1; }
+    100%{ transform:translateY(-110vh) rotate(-8deg) scale(.9); opacity:0; }
+  }
+
   .card{
     width:100%; max-width:420px; background:rgba(255,255,255,0.06);
     border:1px solid rgba(212,175,55,0.4); border-radius:20px; padding:32px 24px;
     text-align:center; backdrop-filter: blur(6px);
-    box-shadow:0 10px 40px rgba(0,0,0,0.4);
+    box-shadow:0 10px 40px rgba(0,0,0,0.4), 0 0 0 rgba(212,175,55,0.0);
+    position:relative; z-index:1;
+    animation: cardGlow 3.2s ease-in-out infinite;
+  }
+  @keyframes cardGlow{
+    0%,100%{ box-shadow:0 10px 40px rgba(0,0,0,0.4), 0 0 18px rgba(212,175,55,0.08); }
+    50%{ box-shadow:0 10px 40px rgba(0,0,0,0.4), 0 0 34px rgba(212,175,55,0.28); }
+  }
+
+  .gift-hero{
+    font-size:54px; line-height:1; margin-bottom:6px;
+    display:inline-block; animation: giftBounce 1.8s ease-in-out infinite;
+  }
+  @keyframes giftBounce{
+    0%,100%{ transform: translateY(0) rotate(-4deg); }
+    50%{ transform: translateY(-10px) rotate(4deg); }
   }
   h1{ font-size:22px; margin:0 0 4px; color:var(--gold); }
   .sub{ opacity:.8; font-size:14px; margin-bottom:24px; }
@@ -56,9 +100,27 @@
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .error{ color:#ff8a8a; margin-top:12px; font-size:14px; }
   .lockedIcon{ font-size:44px; margin-bottom:8px; }
+
+  .trophy{ animation: trophyPop .5s ease-out; }
+  @keyframes trophyPop{
+    0%{ transform:scale(0.3) rotate(-15deg); opacity:0; }
+    60%{ transform:scale(1.15) rotate(6deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0deg); }
+  }
+
+  .confetti-piece{
+    position:fixed; top:-20px; width:8px; height:14px; z-index:5; pointer-events:none;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(110vh) rotate(560deg); opacity:.9; }
+  }
 </style>
 </head>
 <body>
+  <div class="bg-deco" id="bgDeco"></div>
+
   <div class="card" id="card">
 
     <!-- state: loading -->
@@ -75,7 +137,8 @@
 
     <!-- state: enter emp id -->
     <div id="stateEntry" class="hidden">
-      <h1>🎉 จับฉลากของรางวัล</h1>
+      <div class="gift-hero">🎁</div>
+      <h1>จับฉลากของรางวัล</h1>
       <div class="sub">งานเลี้ยงส่งท้ายปีเก่า ต้อนรับปีใหม่ 2569<br>กรอกรหัสพนักงานของคุณ</div>
       <input id="empIdInput" inputmode="numeric" placeholder="รหัสพนักงาน" autofocus />
       <button id="submitBtn">ตรวจสอบ</button>
@@ -91,7 +154,7 @@
       </div>
       <div class="sub">ของรางวัลที่คุณจะได้รับ</div>
       <div class="prize-box">
-        <div class="trophy">🎁</div>
+        <div class="trophy gift-hero" style="font-size:48px;">🎁</div>
         <div class="prize-name" id="prevPrize"></div>
       </div>
       <button id="confirmBtn" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
@@ -134,13 +197,58 @@
     show('stateError');
   }
 
-  function showDone(employee, prize, note) {
+  function showDone(employee, prize, note, celebrate) {
     el('doneName').textContent = employee ? employee.name : '';
     el('doneDept').textContent = employee ? (employee.department || '') : '';
     el('donePrize').textContent = prize ? (prize.name + (prize.unit ? ' (' + prize.unit + ')' : '')) : '-';
     el('doneNote').textContent = note || '';
     show('stateDone');
+    if (celebrate) confettiBurst();
   }
+
+  // ---------- decorative background: gentle floating sparkles + gift boxes ----------
+  function startBgDeco() {
+    const deco = el('bgDeco');
+    const sparkleChars = ['✨', '⭐', '✦'];
+    for (let i = 0; i < 14; i++) {
+      const s = document.createElement('div');
+      s.className = 'spark';
+      s.textContent = sparkleChars[Math.floor(Math.random() * sparkleChars.length)];
+      s.style.left = Math.random() * 100 + '%';
+      s.style.fontSize = (12 + Math.random() * 14) + 'px';
+      s.style.animationDuration = (6 + Math.random() * 6) + 's';
+      s.style.animationDelay = (Math.random() * 8) + 's';
+      deco.appendChild(s);
+    }
+    const giftChars = ['🎁', '🎀'];
+    for (let i = 0; i < 5; i++) {
+      const g = document.createElement('div');
+      g.className = 'gift-float';
+      g.textContent = giftChars[Math.floor(Math.random() * giftChars.length)];
+      g.style.left = Math.random() * 100 + '%';
+      g.style.animationDuration = (10 + Math.random() * 6) + 's';
+      g.style.animationDelay = (Math.random() * 10) + 's';
+      g.style.opacity = '0.35';
+      deco.appendChild(g);
+    }
+  }
+
+  // ---------- confetti burst on a successful confirmation ----------
+  function confettiBurst() {
+    const colors = ['#d4af37', '#f5d873', '#ffffff', '#b98bff', '#ff8fb1'];
+    for (let i = 0; i < 46; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetti-piece';
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.background = colors[Math.floor(Math.random() * colors.length)];
+      c.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+      c.style.animationDelay = (Math.random() * 0.4) + 's';
+      c.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 4200);
+    }
+  }
+  startBgDeco();
 
   async function checkStatus() {
     show('stateLoading');
@@ -153,7 +261,7 @@
         return;
       }
       if (data.claimed) {
-        showDone(data.employee, data.prize, 'ป้ายนี้ถูกใช้ยืนยันไปแล้ว');
+        showDone(data.employee, data.prize, 'ป้ายนี้ถูกใช้ยืนยันไปแล้ว', false);
         return;
       }
       show('stateEntry');
@@ -226,7 +334,7 @@
         showError('ไม่สามารถยืนยันได้', 'กรุณาติดต่อเจ้าหน้าที่หน้างาน');
         return;
       }
-      showDone(lastPreview.employee, data.prize, 'ยินดีด้วยนะครับ/คะ! 🎊');
+      showDone(lastPreview.employee, data.prize, 'ยินดีด้วยนะครับ/คะ! 🎊', true);
     } catch (e) {
       el('confirmBtn').disabled = false;
       showError('เชื่อมต่อไม่ได้', 'กรุณาลองใหม่');
