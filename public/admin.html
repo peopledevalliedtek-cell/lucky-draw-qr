@@ -38,6 +38,12 @@
   input:checked + .slider:before{ transform:translateX(26px); }
   .switch-label .title{ font-weight:700; font-size:15px; }
   .switch-label .desc{ font-size:13px; color:#666; }
+  .reset-btn{
+    background:#fff; border:1px solid #e67e22; color:#e67e22; border-radius:6px;
+    padding:4px 10px; font-size:12px; cursor:pointer;
+  }
+  .reset-btn:hover{ background:#fff6ee; }
+  .reset-btn:disabled{ opacity:.6; cursor:default; }
 </style>
 </head>
 <body>
@@ -70,7 +76,7 @@
     <h2>พนักงานที่จับฉลากแล้ว (<span id="drawnCount">0</span>)</h2>
     <div class="scroll">
     <table>
-      <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>บริษัท</th><th>แผนก</th><th>ของรางวัล</th><th>เวลา</th></tr></thead>
+      <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>บริษัท</th><th>แผนก</th><th>ของรางวัล</th><th>เวลา</th><th></th></tr></thead>
       <tbody id="resultRows"></tbody>
     </table>
     </div>
@@ -114,10 +120,31 @@ async function load() {
       <td>${escapeHtml(r.department || '')}</td>
       <td>${escapeHtml(r.prize_name)}${r.unit ? ' ('+escapeHtml(r.unit)+')' : ''}</td>
       <td>${new Date(r.drawn_at).toLocaleString('th-TH')}</td>
+      <td><button class="reset-btn" data-emp="${escapeHtml(r.emp_id)}" data-name="${escapeHtml(r.name)}">↩️ รีเซ็ต</button></td>
     </tr>
   `).join('');
   } catch(e) { document.body.insertAdjacentHTML("afterbegin", "<pre style='color:red'>"+e+"</pre>"); }
 }
+
+document.getElementById('resultRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.reset-btn');
+  if (!btn) return;
+  const empId = btn.dataset.emp;
+  const name = btn.dataset.name;
+  const ok = confirm(`ยืนยันรีเซ็ตผลของ "${name}" (รหัส ${empId})?\nคืนของรางวัลกลับเข้าสต็อก และป้ายที่ใช้ไปจะสแกนใหม่ได้`);
+  if (!ok) return;
+  btn.disabled = true;
+  btn.textContent = 'กำลังรีเซ็ต...';
+  try {
+    const r = await fetch(`/api/admin/reset/${encodeURIComponent(empId)}`, { method: 'POST' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    load();
+  } catch (err) {
+    alert('รีเซ็ตไม่สำเร็จ: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '↩️ รีเซ็ต';
+  }
+});
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
