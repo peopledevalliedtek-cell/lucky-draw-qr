@@ -177,6 +177,76 @@ app.get('/admin', basicAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// TEMPORARY: one-time seed trigger for hosts without shell access (e.g. Render free plan).
+// Protected by the same admin basic auth. Remove this route after seeding once.
+app.get('/api/admin/run-seed-once', basicAuth, asyncRoute(async (req, res) => {
+  const fs = require('fs');
+  const crypto = require('crypto');
+  const employees = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'employees.json'), 'utf8'));
+  const prizes = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'prizes.json'), 'utf8'));
+  const genToken = () => crypto.randomBytes(7).toString('base64url');
+  const log = [];
+
+  const empRows = employees.map(e => ({
+    emp_id: e.emp_id, name: e.name, company: e.company, department: e.department,
+    division: e.division, section: e.section, position: e.position,
+  }));
+  for (let i = 0; i < empRows.length; i += 500) {
+    const chunk = empRows.slice(i, i + 500);
+    const { error } = await supabase.from('employees').upsert(chunk, { onConflict: 'emp_id' });
+    if (error) throw error;
+  }
+  log.push(`Upserted ${empRows.length} employees.`);
+
+  for (const p of prizes) {
+    const { data: existing } = await supabase.from('prizes').select('id').eq('id', p.id).maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from('prizes').update({ name: p.name, unit: p.unit, stock_total: p.stock }).eq('id', p.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('prizes').insert({ id: p.id, name: p.name, unit: p.unit, stock_total: p.stock, stock_remaining: p.stock });
+      if (error) throw error;
+    }
+  }
+  log.push(`Upserted ${prizes.length} prizes.`);
+
+  const { data: existingSetting } = await supabase.from('settings').select('key').eq('key', 'event_open').maybeSingle();
+  if (!existingSetting) {
+    const { error } = await supabase.from('settings').insert({ key: 'event_open', value: '0' });
+    if (error) throw error;
+  }
+
+  const { count: badgeCount, error: countErr } = await supabase.from('badges').select('*', { count: 'exact', head: true });
+  if (countErr) throw countErr;
+
+  if (badgeCount === 0) {
+    const rows = [];
+    for (const p of prizes) for (let i = 0; i < p.stock; i++) rows.push(p.id);
+    for (let i = rows.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rows[i], rows[j]] = [rows[j], rows[i]];
+    }
+    const tokens = new Set();
+    const badgeRows = rows.map(prizeId => {
+      let t = genToken();
+      while (tokens.has(t)) t = genToken();
+      tokens.add(t);
+      return { token: t, prize_id: prizeId };
+    });
+    for (let i = 0; i < badgeRows.length; i += 500) {
+      const chunk = badgeRows.slice(i, i + 500);
+      const { error } = await supabase.from('badges').insert(chunk);
+      if (error) throw error;
+    }
+    log.push(`Generated ${badgeRows.length} badges (shuffled).`);
+  } else {
+    log.push(`Badges already exist (${badgeCount} rows) — left untouched.`);
+  }
+
+  log.push('Seed complete.');
+  res.json({ ok: true, log });
+}));
+
 app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
   const [{ count: totalEmployees }, { count: drawnCount }, { count: totalBadges }, { count: claimedBadges }] = await Promise.all([
     supabase.from('employees').select('*', { count: 'exact', head: true }),
