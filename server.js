@@ -177,6 +177,16 @@ app.get('/admin', basicAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// TEMPORARY: redirect to one unclaimed badge, for previewing the live UI
+// design without needing direct Supabase access. Remove after use.
+app.get('/api/admin/preview-badge-once', basicAuth, asyncRoute(async (req, res) => {
+  const { data, error } = await supabase
+    .from('badges').select('token').is('claimed_by', null).limit(1).maybeSingle();
+  if (error) throw error;
+  if (!data) { res.status(404).send('ไม่พบป้ายที่ยังไม่ถูกใช้'); return; }
+  res.redirect(`/badge/${data.token}`);
+}));
+
 app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
   const [{ count: totalEmployees }, { count: drawnCount }, { count: totalBadges }, { count: claimedBadges }] = await Promise.all([
     supabase.from('employees').select('*', { count: 'exact', head: true }),
