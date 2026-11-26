@@ -1,0 +1,17 @@
+{
+  "name": "lucky-draw",
+  "version": "2.0.0",
+  "description": "ระบบจับฉลากของรางวัลด้วย QR Code ติดป้ายชื่อพนักงาน (ฐานข้อมูล Supabase)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.js",
+    "badges": "node scripts/generate_badges.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4"
+  }
+}

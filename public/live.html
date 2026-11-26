@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎉 ผู้โชคดี - Live Wall</title>
+<style>
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; overflow:hidden;
+    background: radial-gradient(circle at 50% 0%, #2d1b4e, #1a1033);
+    font-family:'Segoe UI', Tahoma, sans-serif; color:#fff;
+  }
+  header{
+    text-align:center; padding:28px 16px 12px;
+  }
+  header h1{
+    font-size:40px; margin:0; color:#d4af37; text-shadow:0 0 20px rgba(212,175,55,0.5);
+  }
+  header .sub{ opacity:.7; font-size:16px; margin-top:6px; }
+  .closed-banner{
+    text-align:center; margin-top:120px; font-size:28px; opacity:.6;
+  }
+  #feed{
+    display:flex; flex-direction:column; gap:14px; max-width:900px; margin:0 auto; padding:0 24px 40px;
+  }
+  .row{
+    display:flex; align-items:center; gap:20px; background:rgba(255,255,255,0.07);
+    border:1px solid rgba(212,175,55,0.35); border-radius:16px; padding:16px 24px;
+    animation: slideIn .5s ease-out;
+  }
+  .row .icon{ font-size:36px; flex-shrink:0; }
+  .row .name{ font-size:24px; font-weight:700; }
+  .row .dept{ font-size:14px; opacity:.65; }
+  .row .prize{ margin-left:auto; text-align:right; font-size:20px; font-weight:800; color:#d4af37; }
+  .row .time{ font-size:12px; opacity:.5; margin-left:16px; min-width:70px; text-align:right; }
+  @keyframes slideIn {
+    from { opacity:0; transform: translateY(-30px) scale(0.95); }
+    to { opacity:1; transform: translateY(0) scale(1); }
+  }
+  .confetti{
+    position:fixed; top:-20px; width:10px; height:16px; opacity:.9;
+    animation: fall linear forwards; z-index:999; border-radius:2px;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(540deg); opacity:0; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🎉 รายชื่อผู้โชคดี</h1>
+    <div class="sub">งานเลี้ยงส่งท้ายปีเก่า ต้อนรับปีใหม่ 2569</div>
+  </header>
+
+  <div id="closedBanner" class="closed-banner" style="display:none;">ระบบจะเปิดให้จับฉลากเร็วๆ นี้...</div>
+  <div id="feed"></div>
+
+<script>
+  const feed = document.getElementById('feed');
+  const closedBanner = document.getElementById('closedBanner');
+  const seen = new Set();
+  const colors = ['#d4af37','#ff6b6b','#6c5ce7','#00cec9','#fdcb6e','#e84393'];
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function confettiBurst() {
+    for (let i = 0; i < 40; i++) {
+      const d = document.createElement('div');
+      d.className = 'confetti';
+      d.style.left = Math.random() * 100 + 'vw';
+      d.style.background = colors[Math.floor(Math.random() * colors.length)];
+      d.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 4000);
+    }
+  }
+
+  function addRow(r, animate) {
+    const key = r.emp_id + '|' + r.drawn_at;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const row = document.createElement('div');
+    row.className = 'row';
+    if (!animate) row.style.animation = 'none';
+    row.innerHTML = `
+      <div class="icon">🏆</div>
+      <div>
+        <div class="name">${escapeHtml(r.name)}</div>
+        <div class="dept">${escapeHtml([r.company, r.department].filter(Boolean).join(' · '))}</div>
+      </div>
+      <div class="prize">${escapeHtml(r.prize_name)}${r.unit ? ' ('+escapeHtml(r.unit)+')' : ''}</div>
+      <div class="time">${new Date(r.drawn_at).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</div>
+    `;
+    feed.insertBefore(row, feed.firstChild);
+    while (feed.children.length > 25) feed.removeChild(feed.lastChild);
+    if (animate) confettiBurst();
+  }
+
+  async function loadInitial() {
+    try {
+      const r = await fetch('/api/live/recent');
+      const data = await r.json();
+      closedBanner.style.display = data.eventOpen ? 'none' : 'block';
+      // oldest first so addRow's "insertBefore(first)" ends with newest on top
+      [...data.results].reverse().forEach(r => addRow(r, false));
+    } catch (e) { /* ignore, SSE will still work once connected */ }
+  }
+
+  function connectStream() {
+    const es = new EventSource('/api/stream');
+    es.addEventListener('claim', (ev) => {
+      const d = JSON.parse(ev.data);
+      closedBanner.style.display = 'none';
+      addRow({
+        emp_id: d.emp_id, name: d.name, company: d.company, department: d.department,
+        prize_name: d.prize.name, unit: d.prize.unit, drawn_at: d.at,
+      }, true);
+    });
+    es.addEventListener('event_state', (ev) => {
+      const d = JSON.parse(ev.data);
+      if (!d.open) closedBanner.style.display = 'block';
+      else if (feed.children.length === 0) closedBanner.style.display = 'none';
+    });
+  }
+
+  loadInitial();
+  connectStream();
+</script>
+</body>
+</html>

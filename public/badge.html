@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จับฉลากของรางวัล</title>
+<style>
+  :root{ --gold:#d4af37; --dark:#1a1033; --dark2:#2d1b4e; }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 50% 0%, var(--dark2), var(--dark));
+    font-family:'Segoe UI', Tahoma, sans-serif; color:#fff; padding:24px;
+  }
+  .card{
+    width:100%; max-width:420px; background:rgba(255,255,255,0.06);
+    border:1px solid rgba(212,175,55,0.4); border-radius:20px; padding:32px 24px;
+    text-align:center; backdrop-filter: blur(6px);
+    box-shadow:0 10px 40px rgba(0,0,0,0.4);
+  }
+  h1{ font-size:22px; margin:0 0 4px; color:var(--gold); }
+  .sub{ opacity:.8; font-size:14px; margin-bottom:24px; }
+  input{
+    width:100%; padding:14px 16px; font-size:18px; border-radius:12px; border:1px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.08); color:#fff; text-align:center; letter-spacing:1px; margin-bottom:16px;
+  }
+  input::placeholder{ color:rgba(255,255,255,0.4); }
+  button{
+    background:linear-gradient(135deg, var(--gold), #f5d873); color:#2a1d00; border:none;
+    padding:16px 32px; font-size:18px; font-weight:700; border-radius:999px; cursor:pointer;
+    box-shadow:0 6px 20px rgba(212,175,55,0.4); transition:transform .15s; width:100%;
+  }
+  button:active{ transform:scale(0.97); }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  button.secondary{
+    background:transparent; color:#fff; box-shadow:none; border:1px solid rgba(255,255,255,0.3);
+    margin-top:10px; font-weight:500; font-size:15px;
+  }
+  .hidden{ display:none !important; }
+  .who{ background:rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:20px; }
+  .who .name{ font-size:19px; font-weight:700; }
+  .who .dept{ font-size:14px; opacity:.75; margin-top:2px; }
+  .prize-box{
+    margin-top:4px; padding:24px 16px; border-radius:16px;
+    background:linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05));
+    border:1px solid rgba(212,175,55,0.5);
+  }
+  .trophy{ font-size:48px; }
+  .prize-name{ font-size:26px; font-weight:800; color:var(--gold); margin:8px 0; }
+  .note{ margin-top:16px; font-size:13px; opacity:.7; }
+  .spin{
+    width:50px; height:50px; border-radius:50%;
+    border:5px solid rgba(212,175,55,0.25); border-top-color:var(--gold);
+    margin:16px auto; animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .error{ color:#ff8a8a; margin-top:12px; font-size:14px; }
+  .lockedIcon{ font-size:44px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+
+    <!-- state: loading -->
+    <div id="stateLoading">
+      <div class="spin"></div>
+    </div>
+
+    <!-- state: not open yet -->
+    <div id="stateClosed" class="hidden">
+      <div class="lockedIcon">🔒</div>
+      <h1>ยังไม่เปิดให้จับฉลาก</h1>
+      <div class="sub">กรุณารอประกาศจากพิธีกรในช่วงเย็น แล้วค่อยสแกนใหม่อีกครั้งนะครับ/คะ</div>
+    </div>
+
+    <!-- state: enter emp id -->
+    <div id="stateEntry" class="hidden">
+      <h1>🎉 จับฉลากของรางวัล</h1>
+      <div class="sub">งานเลี้ยงส่งท้ายปีเก่า ต้อนรับปีใหม่ 2569<br>กรอกรหัสพนักงานของคุณ</div>
+      <input id="empIdInput" inputmode="numeric" placeholder="รหัสพนักงาน" autofocus />
+      <button id="submitBtn">ตรวจสอบ</button>
+      <div class="error hidden" id="entryError"></div>
+    </div>
+
+    <!-- state: preview (review before confirming) -->
+    <div id="statePreview" class="hidden">
+      <h1>ยืนยันตัวตน</h1>
+      <div class="who">
+        <div class="name" id="prevName"></div>
+        <div class="dept" id="prevDept"></div>
+      </div>
+      <div class="sub">ของรางวัลที่คุณจะได้รับ</div>
+      <div class="prize-box">
+        <div class="trophy">🎁</div>
+        <div class="prize-name" id="prevPrize"></div>
+      </div>
+      <button id="confirmBtn" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
+      <button class="secondary" id="backBtn">ไม่ใช่ฉัน / กรอกใหม่</button>
+    </div>
+
+    <!-- state: done (freshly confirmed, or re-scan of an already-claimed badge) -->
+    <div id="stateDone" class="hidden">
+      <h1 id="doneTitle">🏆 ยินดีด้วย!</h1>
+      <div class="who">
+        <div class="name" id="doneName"></div>
+        <div class="dept" id="doneDept"></div>
+      </div>
+      <div class="prize-box">
+        <div class="trophy">🏆</div>
+        <div class="prize-name" id="donePrize"></div>
+      </div>
+      <div class="note" id="doneNote"></div>
+    </div>
+
+    <!-- state: generic error -->
+    <div id="stateError" class="hidden">
+      <div class="lockedIcon">⚠️</div>
+      <h1 id="errTitle">เกิดข้อผิดพลาด</h1>
+      <div class="sub" id="errMsg"></div>
+      <button class="secondary" id="retryBtn">ลองใหม่</button>
+    </div>
+
+  </div>
+
+<script>
+  const token = location.pathname.split('/').pop();
+  const el = (id) => document.getElementById(id);
+  const states = ['stateLoading','stateClosed','stateEntry','statePreview','stateDone','stateError'];
+  function show(id) { states.forEach(s => el(s).classList.toggle('hidden', s !== id)); }
+
+  function showError(title, msg) {
+    el('errTitle').textContent = title;
+    el('errMsg').textContent = msg;
+    show('stateError');
+  }
+
+  function showDone(employee, prize, note) {
+    el('doneName').textContent = employee ? employee.name : '';
+    el('doneDept').textContent = employee ? (employee.department || '') : '';
+    el('donePrize').textContent = prize ? (prize.name + (prize.unit ? ' (' + prize.unit + ')' : '')) : '-';
+    el('doneNote').textContent = note || '';
+    show('stateDone');
+  }
+
+  async function checkStatus() {
+    show('stateLoading');
+    try {
+      const r = await fetch('/api/badge/' + encodeURIComponent(token) + '/status');
+      const data = await r.json();
+      if (!data.open) { show('stateClosed'); return; }
+      if (data.error === 'badge_not_found') {
+        showError('ไม่พบ QR นี้ในระบบ', 'กรุณาติดต่อเจ้าหน้าที่หน้างาน');
+        return;
+      }
+      if (data.claimed) {
+        showDone(data.employee, data.prize, 'ป้ายนี้ถูกใช้ยืนยันไปแล้ว');
+        return;
+      }
+      show('stateEntry');
+      el('empIdInput').value = '';
+      el('entryError').classList.add('hidden');
+      setTimeout(() => el('empIdInput').focus(), 50);
+    } catch (e) {
+      showError('เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบอินเทอร์เน็ต แล้วลองใหม่');
+    }
+  }
+
+  let lastPreview = null;
+
+  el('submitBtn').addEventListener('click', async () => {
+    const empId = el('empIdInput').value.trim();
+    el('entryError').classList.add('hidden');
+    if (!empId) return;
+    el('submitBtn').disabled = true;
+    try {
+      const r = await fetch('/api/badge/' + encodeURIComponent(token) + '/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emp_id: empId }),
+      });
+      const data = await r.json();
+      el('submitBtn').disabled = false;
+      if (!r.ok) {
+        if (data.error === 'emp_not_found') {
+          el('entryError').textContent = 'ไม่พบรหัสพนักงานนี้ กรุณาตรวจสอบอีกครั้ง';
+        } else if (data.error === 'employee_already_drawn') {
+          const p = data.prize ? (data.prize.name + (data.prize.unit ? ' ('+data.prize.unit+')' : '')) : '-';
+          el('entryError').textContent = 'รหัสพนักงานนี้ได้รับรางวัลไปแล้ว: ' + p;
+        } else if (data.error === 'badge_already_used') {
+          el('entryError').textContent = 'ป้ายนี้ถูกใช้โดยคนอื่นไปแล้ว กรุณาติดต่อเจ้าหน้าที่';
+        } else if (data.error === 'not_open') {
+          show('stateClosed'); return;
+        } else {
+          el('entryError').textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+        }
+        el('entryError').classList.remove('hidden');
+        return;
+      }
+      lastPreview = { empId, prize: data.prize, employee: data.employee };
+      el('prevName').textContent = data.employee.name;
+      el('prevDept').textContent = [data.employee.department, data.employee.company].filter(Boolean).join(' · ');
+      el('prevPrize').textContent = data.prize.name + (data.prize.unit ? ' (' + data.prize.unit + ')' : '');
+      show('statePreview');
+    } catch (e) {
+      el('submitBtn').disabled = false;
+      el('entryError').textContent = 'เชื่อมต่อไม่ได้ กรุณาลองใหม่';
+      el('entryError').classList.remove('hidden');
+    }
+  });
+
+  el('backBtn').addEventListener('click', () => { show('stateEntry'); setTimeout(() => el('empIdInput').focus(), 50); });
+
+  el('confirmBtn').addEventListener('click', async () => {
+    if (!lastPreview) return;
+    el('confirmBtn').disabled = true;
+    try {
+      const r = await fetch('/api/badge/' + encodeURIComponent(token) + '/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emp_id: lastPreview.empId }),
+      });
+      const data = await r.json();
+      el('confirmBtn').disabled = false;
+      if (!r.ok) {
+        if (data.error === 'not_open') { show('stateClosed'); return; }
+        showError('ไม่สามารถยืนยันได้', 'กรุณาติดต่อเจ้าหน้าที่หน้างาน');
+        return;
+      }
+      showDone(lastPreview.employee, data.prize, 'ยินดีด้วยนะครับ/คะ! 🎊');
+    } catch (e) {
+      el('confirmBtn').disabled = false;
+      showError('เชื่อมต่อไม่ได้', 'กรุณาลองใหม่');
+    }
+  });
+
+  el('empIdInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') el('submitBtn').click(); });
+  el('retryBtn').addEventListener('click', checkStatus);
+
+  checkStatus();
+</script>
+</body>
+</html>

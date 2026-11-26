@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - ระบบจับฉลาก</title>
+<style>
+  body{ font-family:'Segoe UI',Tahoma,sans-serif; background:#f4f5f7; margin:0; padding:24px; color:#222;}
+  h1{ font-size:22px; }
+  .stats{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .stat{ background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); min-width:140px; }
+  .stat .num{ font-size:28px; font-weight:700; }
+  .stat .label{ font-size:13px; color:#666; }
+  table{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+  th,td{ text-align:left; padding:10px 12px; border-bottom:1px solid #eee; font-size:14px; }
+  th{ background:#fafafa; position:sticky; top:0; }
+  .tag{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#eef; }
+  .section{ margin-top:32px; }
+  .bar-wrap{ background:#eee; border-radius:6px; overflow:hidden; height:8px; width:100%; }
+  .bar{ background:#6c5ce7; height:100%; }
+  a.btn{ display:inline-block; margin-bottom:16px; background:#2d1b4e; color:#fff; padding:10px 18px;
+    border-radius:8px; text-decoration:none; font-size:14px; }
+  .scroll{ max-height:480px; overflow:auto; }
+  .switch-box{
+    display:flex; align-items:center; gap:16px; background:#fff; border-radius:12px;
+    padding:16px 20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); margin-bottom:20px; max-width:480px;
+  }
+  .switch{ position:relative; width:56px; height:30px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{
+    position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:999px; transition:.2s;
+  }
+  .slider:before{
+    content:""; position:absolute; height:24px; width:24px; left:3px; bottom:3px;
+    background:#fff; border-radius:50%; transition:.2s;
+  }
+  input:checked + .slider{ background:#2ecc71; }
+  input:checked + .slider:before{ transform:translateX(26px); }
+  .switch-label .title{ font-weight:700; font-size:15px; }
+  .switch-label .desc{ font-size:13px; color:#666; }
+</style>
+</head>
+<body>
+  <h1>🎁 แดชบอร์ดระบบจับฉลาก <span id="liveDot" style="font-size:13px; font-weight:400; color:#999;">● เชื่อมต่อ...</span></h1>
+  <a class="btn" href="/api/admin/export.csv">⬇️ ดาวน์โหลดผลทั้งหมด (CSV)</a>
+  <a class="btn" href="/live" target="_blank" style="background:#6c5ce7;">📺 เปิดจอ Live Wall</a>
+
+  <div class="switch-box">
+    <label class="switch">
+      <input type="checkbox" id="eventToggle" />
+      <span class="slider"></span>
+    </label>
+    <div class="switch-label">
+      <div class="title" id="eventStatusTitle">กำลังโหลด...</div>
+      <div class="desc">เปิดเมื่อพร้อมให้พนักงานสแกน QR จับฉลาก (ช่วงเย็น)</div>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="section">
+    <h2>คงเหลือของรางวัล</h2>
+    <table>
+      <thead><tr><th>ของรางวัล</th><th>คงเหลือ / ทั้งหมด</th><th style="width:30%">สัดส่วน</th></tr></thead>
+      <tbody id="prizeRows"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>พนักงานที่จับฉลากแล้ว (<span id="drawnCount">0</span>)</h2>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>บริษัท</th><th>แผนก</th><th>ของรางวัล</th><th>เวลา</th></tr></thead>
+      <tbody id="resultRows"></tbody>
+    </table>
+    </div>
+  </div>
+
+<script>
+async function load() {
+  try {
+  const r = await fetch('/api/admin/summary');
+  if (!r.ok) throw new Error('http ' + r.status);
+  const data = await r.json();
+
+  const toggle = document.getElementById('eventToggle');
+  if (!toggle.dataset.touched) toggle.checked = data.eventOpen;
+  document.getElementById('eventStatusTitle').textContent = data.eventOpen
+    ? '🟢 ระบบเปิดอยู่ — พนักงานสแกนจับฉลากได้แล้ว'
+    : '🔴 ระบบปิดอยู่ — พนักงานสแกนแล้วจะเห็น "ยังไม่เปิดให้จับฉลาก"';
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="num">${data.totalEmployees}</div><div class="label">พนักงานทั้งหมด</div></div>
+    <div class="stat"><div class="num">${data.drawnCount}</div><div class="label">จับฉลากแล้ว</div></div>
+    <div class="stat"><div class="num">${data.totalEmployees - data.drawnCount}</div><div class="label">ยังไม่จับฉลาก</div></div>
+    <div class="stat"><div class="num">${data.claimedBadges} / ${data.totalBadges}</div><div class="label">ป้ายที่ถูกใช้แล้ว</div></div>
+  `;
+
+  document.getElementById('prizeRows').innerHTML = data.prizes.map(p => {
+    const pct = p.stock_total ? Math.round((p.stock_remaining / p.stock_total) * 100) : 0;
+    return `<tr>
+      <td>${escapeHtml(p.name)}${p.unit ? ' <span class="tag">'+escapeHtml(p.unit)+'</span>' : ''}</td>
+      <td>${p.stock_remaining} / ${p.stock_total}</td>
+      <td><div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('drawnCount').textContent = data.drawnCount;
+  document.getElementById('resultRows').innerHTML = data.results.map(r => `
+    <tr>
+      <td>${escapeHtml(r.emp_id)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.company || '')}</td>
+      <td>${escapeHtml(r.department || '')}</td>
+      <td>${escapeHtml(r.prize_name)}${r.unit ? ' ('+escapeHtml(r.unit)+')' : ''}</td>
+      <td>${new Date(r.drawn_at).toLocaleString('th-TH')}</td>
+    </tr>
+  `).join('');
+  } catch(e) { document.body.insertAdjacentHTML("afterbegin", "<pre style='color:red'>"+e+"</pre>"); }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('eventToggle').addEventListener('change', async (e) => {
+  e.target.dataset.touched = '1';
+  const open = e.target.checked;
+  const ok = confirm(open
+    ? 'ยืนยันเปิดระบบให้พนักงานเริ่มสแกนจับฉลาก?'
+    : 'ยืนยันปิดระบบ (พนักงานจะสแกนไม่ได้ชั่วคราว)?');
+  if (!ok) { e.target.checked = !open; delete e.target.dataset.touched; return; }
+  await fetch('/api/admin/event', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ open })
+  });
+  delete e.target.dataset.touched;
+  load();
+});
+
+load();
+setInterval(load, 20000); // safety-net refresh in case the live stream drops
+
+// ---------- Realtime push (SSE) ----------
+// Updates the dashboard the instant someone confirms a draw or the admin
+// flips the open/close switch, instead of waiting for the next poll.
+function connectStream() {
+  const dot = document.getElementById('liveDot');
+  const es = new EventSource('/api/stream');
+  es.onopen = () => { dot.textContent = '● เรียลไทม์'; dot.style.color = '#2ecc71'; };
+  es.onerror = () => { dot.textContent = '● กำลังเชื่อมต่อใหม่...'; dot.style.color = '#e67e22'; };
+  es.addEventListener('claim', load);
+  es.addEventListener('reset', load);
+  es.addEventListener('event_state', load);
+}
+connectStream();
+</script>
+</body>
+</html>
