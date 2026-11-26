@@ -177,61 +177,6 @@ app.get('/admin', basicAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// TEMPORARY: generate printable badges + private manifest on demand, as
-// downloads, for hosts without shell access. Remove after use.
-app.get('/api/admin/gen-badges-once', basicAuth, asyncRoute(async (req, res) => {
-  const QRCode = require('qrcode');
-  const BASE_URL = `${req.protocol}://${req.get('host')}`;
-  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-  const { data: badges, error } = await supabase.from('badges').select('token, prizes(name, unit)').order('token');
-  if (error) throw error;
-  if (!badges || badges.length === 0) {
-    res.status(400).send('ไม่พบป้ายในฐานข้อมูล กรุณา seed ก่อน');
-    return;
-  }
-
-  const badgeCells = [];
-  for (const b of badges) {
-    const url = `${BASE_URL}/badge/${b.token}`;
-    const dataUrl = await QRCode.toDataURL(url, { width: 220, margin: 1 });
-    badgeCells.push(`
-      <div class="badge">
-        <div class="nameline">ชื่อ: ________________________</div>
-        <img src="${dataUrl}" width="110" height="110" />
-        <div class="hint">สแกนตอนเย็นเพื่อลุ้นของรางวัล</div>
-      </div>`);
-  }
-
-  const html = `<!DOCTYPE html>
-<html lang="th"><head><meta charset="UTF-8"><title>ป้ายชื่อ QR Code</title>
-<style>
-  @page { size: A4; margin: 10mm; }
-  body { font-family: 'Tahoma', sans-serif; margin:0; }
-  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:6mm; }
-  .badge { border:1px dashed #999; border-radius:8px; padding:10px 8px; text-align:center; page-break-inside: avoid; }
-  .nameline{ font-size:11px; color:#555; margin-bottom:8px; }
-  .hint{ font-size:9px; color:#888; margin-top:4px; }
-  img{ display:block; margin:0 auto; }
-</style></head>
-<body><div class="grid">${badgeCells.join('\n')}</div></body></html>`;
-
-  res.setHeader('Content-Disposition', 'attachment; filename="badges.html"');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
-}));
-
-app.get('/api/admin/gen-manifest-once', basicAuth, asyncRoute(async (req, res) => {
-  const { data: badges, error } = await supabase.from('badges').select('token, prizes(name, unit)').order('token');
-  if (error) throw error;
-  const rows = [['badge_token', 'prize_name', 'unit']];
-  for (const b of badges || []) rows.push([b.token, b.prizes?.name || '', b.prizes?.unit || '']);
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-  res.setHeader('Content-Disposition', 'attachment; filename="admin_manifest.csv"');
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.send('﻿' + csv);
-}));
-
 app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
   const [{ count: totalEmployees }, { count: drawnCount }, { count: totalBadges }, { count: claimedBadges }] = await Promise.all([
     supabase.from('employees').select('*', { count: 'exact', head: true }),
