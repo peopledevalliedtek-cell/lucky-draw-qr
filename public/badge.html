@@ -166,6 +166,15 @@
     30%{ opacity:1; }
     100%{ opacity:0; transform: translate(var(--dx), var(--dy)) scale(1); }
   }
+
+  /* ---------- tap-to-draw invitation (preview stage) ---------- */
+  .tap-target{ cursor:pointer; animation: giftBounce 1.8s ease-in-out infinite, tapPulse 1.6s ease-in-out infinite; }
+  @keyframes tapPulse{
+    0%,100%{ filter:drop-shadow(0 0 0 rgba(212,175,55,0)); }
+    50%{ filter:drop-shadow(0 0 14px rgba(212,175,55,0.85)); }
+  }
+  .tap-hint{ font-size:14px; color:var(--gold); margin-top:2px; animation: hintBlink 1.4s ease-in-out infinite; }
+  @keyframes hintBlink{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
 </style>
 </head>
 <body>
@@ -202,12 +211,13 @@
         <div class="name" id="prevName"></div>
         <div class="dept" id="prevDept"></div>
       </div>
-      <div class="sub">ของรางวัลที่คุณจะได้รับ</div>
+      <div class="sub" id="prevSub">แตะที่กล่องเพื่อลุ้นของรางวัล! 🎉</div>
       <div class="prize-box">
-        <div class="trophy gift-hero" id="prevTrophy" style="font-size:48px;">🎁</div>
-        <div class="prize-name" id="prevPrize"></div>
+        <div class="trophy gift-hero tap-target" id="prevTrophy" style="font-size:48px;">🎁</div>
+        <div class="tap-hint" id="tapHint">แตะเพื่อเปิดกล่อง 👆</div>
+        <div class="prize-name hidden" id="prevPrize"></div>
       </div>
-      <button id="confirmBtn" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
+      <button id="confirmBtn" class="hidden" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
       <button class="secondary" id="backBtn">ไม่ใช่ฉัน / กรอกใหม่</button>
     </div>
 
@@ -258,6 +268,32 @@
     } else {
       setPrizeVisual('doneTrophy', prize, '🏆');
     }
+  }
+
+  // Resets the preview stage to its "tap the box to try your luck" state,
+  // then wires a one-time click handler that reveals the assigned prize.
+  function setupPrizeDraw(prize) {
+    const holder = el('prevTrophy');
+    holder.innerHTML = '🎁';
+    holder.className = 'trophy gift-hero tap-target';
+    holder.style.fontSize = '48px';
+    el('tapHint').classList.remove('hidden');
+    el('prevSub').textContent = 'แตะที่กล่องเพื่อลุ้นของรางวัล! 🎉';
+    el('prevPrize').textContent = '';
+    el('prevPrize').classList.add('hidden');
+    el('confirmBtn').classList.add('hidden');
+    holder.onclick = () => {
+      holder.onclick = null;
+      holder.classList.remove('tap-target');
+      el('tapHint').classList.add('hidden');
+      el('prevSub').textContent = 'ของรางวัลที่คุณจะได้รับ';
+      playGiftOpen('prevTrophy', prize, '🎁', true);
+      setTimeout(() => {
+        el('prevPrize').textContent = prize.name + (prize.unit ? ' (' + prize.unit + ')' : '');
+        el('prevPrize').classList.remove('hidden');
+        el('confirmBtn').classList.remove('hidden');
+      }, 1250);
+    };
   }
 
   // Plays a short "unwrap the gift" sequence inside elId (shake → lid pops off →
@@ -424,9 +460,8 @@
       lastPreview = { empId, prize: data.prize, employee: data.employee };
       el('prevName').textContent = data.employee.name;
       el('prevDept').textContent = [data.employee.department, data.employee.company].filter(Boolean).join(' · ');
-      el('prevPrize').textContent = data.prize.name + (data.prize.unit ? ' (' + data.prize.unit + ')' : '');
+      setupPrizeDraw(data.prize);
       show('statePreview');
-      playGiftOpen('prevTrophy', data.prize, '🎁', false);
     } catch (e) {
       el('submitBtn').disabled = false;
       el('entryError').textContent = 'เชื่อมต่อไม่ได้ กรุณาลองใหม่';
