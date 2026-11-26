@@ -120,6 +120,52 @@
     0%{ transform:translateY(0) rotate(0deg); opacity:1; }
     100%{ transform:translateY(110vh) rotate(560deg); opacity:.9; }
   }
+
+  /* ---------- gift-unboxing reveal animation ---------- */
+  .gift-open-wrap{
+    position:relative; width:100%; height:64px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .gift-open-wrap .box{ font-size:48px; display:inline-block; transform-origin:50% 70%; }
+  .gift-shake{ animation: giftShake .6s ease-in-out; }
+  @keyframes giftShake{
+    0%,100%{ transform:rotate(0deg) translateY(0); }
+    15%{ transform:rotate(-9deg) translateY(0); }
+    30%{ transform:rotate(8deg) translateY(-2px); }
+    45%{ transform:rotate(-7deg) translateY(0); }
+    60%{ transform:rotate(6deg) translateY(-2px); }
+    75%{ transform:rotate(-4deg) translateY(0); }
+    90%{ transform:rotate(2deg); }
+  }
+  .gift-lid{
+    position:absolute; font-size:26px; left:50%; top:6px;
+    transform:translateX(-50%); opacity:0;
+  }
+  .gift-lid.fly{ animation: lidFly .7s ease-out forwards; }
+  @keyframes lidFly{
+    0%{ opacity:1; transform:translate(-50%,0) rotate(0deg) scale(1); }
+    100%{ opacity:0; transform:translate(-50%,-64px) rotate(-220deg) scale(.6); }
+  }
+  .gift-flash{
+    position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:0;
+    background:radial-gradient(circle, rgba(255,255,255,0.95), rgba(212,175,55,0.35) 45%, rgba(212,175,55,0) 72%);
+  }
+  .gift-flash.pop{ animation: flashPop .55s ease-out forwards; }
+  @keyframes flashPop{
+    0%{ opacity:0; transform:scale(.3); }
+    40%{ opacity:1; transform:scale(1.5); }
+    100%{ opacity:0; transform:scale(2); }
+  }
+  .gift-sparkle{
+    position:absolute; font-size:14px; opacity:0; color:var(--gold);
+    filter:drop-shadow(0 0 3px rgba(212,175,55,0.9));
+  }
+  .gift-sparkle.pop{ animation: sparklePop .7s ease-out forwards; }
+  @keyframes sparklePop{
+    0%{ opacity:0; transform:translate(0,0) scale(.4); }
+    30%{ opacity:1; }
+    100%{ opacity:0; transform: translate(var(--dx), var(--dy)) scale(1); }
+  }
 </style>
 </head>
 <body>
@@ -206,9 +252,57 @@
     el('doneDept').textContent = employee ? (employee.department || '') : '';
     el('donePrize').textContent = prize ? (prize.name + (prize.unit ? ' (' + prize.unit + ')' : '')) : '-';
     el('doneNote').textContent = note || '';
-    setPrizeVisual('doneTrophy', prize, '🏆');
     show('stateDone');
-    if (celebrate) confettiBurst();
+    if (celebrate) {
+      playGiftOpen('doneTrophy', prize, '🏆', true);
+    } else {
+      setPrizeVisual('doneTrophy', prize, '🏆');
+    }
+  }
+
+  // Plays a short "unwrap the gift" sequence inside elId (shake → lid pops off →
+  // sparkle flash) and then swaps in the real prize photo/emoji. If burst is true,
+  // a confetti burst fires at the moment the box pops open.
+  function playGiftOpen(elId, prize, fallbackEmoji, burst) {
+    const holder = el(elId);
+    holder.classList.remove('trophy');
+    holder.innerHTML =
+      '<div class="gift-open-wrap">' +
+        '<div class="gift-flash"></div>' +
+        '<span class="box gift-shake">🎁</span>' +
+        '<span class="gift-lid">🎀</span>' +
+      '</div>';
+    const wrap = holder.querySelector('.gift-open-wrap');
+    const box = wrap.querySelector('.box');
+    const lid = wrap.querySelector('.gift-lid');
+    const flash = wrap.querySelector('.gift-flash');
+
+    setTimeout(() => {
+      lid.classList.add('fly');
+      flash.classList.add('pop');
+      box.style.transition = 'opacity .3s ease-out, transform .3s ease-out';
+      box.style.opacity = '0';
+      box.style.transform = 'scale(0.55)';
+      const sparkleChars = ['✨', '⭐', '✦'];
+      for (let i = 0; i < 8; i++) {
+        const sp = document.createElement('span');
+        sp.className = 'gift-sparkle pop';
+        sp.textContent = sparkleChars[Math.floor(Math.random() * sparkleChars.length)];
+        const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.4;
+        const dist = 40 + Math.random() * 20;
+        sp.style.left = '50%';
+        sp.style.top = '50%';
+        sp.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+        sp.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+        wrap.appendChild(sp);
+      }
+      if (burst) confettiBurst();
+    }, 600);
+
+    setTimeout(() => {
+      setPrizeVisual(elId, prize, fallbackEmoji);
+      holder.classList.add('trophy');
+    }, 1250);
   }
 
   // Shows the uploaded product photo for this prize (/static/images/prizes/<id>.jpg)
@@ -331,8 +425,8 @@
       el('prevName').textContent = data.employee.name;
       el('prevDept').textContent = [data.employee.department, data.employee.company].filter(Boolean).join(' · ');
       el('prevPrize').textContent = data.prize.name + (data.prize.unit ? ' (' + data.prize.unit + ')' : '');
-      setPrizeVisual('prevTrophy', data.prize, '🎁');
       show('statePreview');
+      playGiftOpen('prevTrophy', data.prize, '🎁', false);
     } catch (e) {
       el('submitBtn').disabled = false;
       el('entryError').textContent = 'เชื่อมต่อไม่ได้ กรุณาลองใหม่';
