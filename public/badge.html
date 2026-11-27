@@ -242,7 +242,7 @@
   function showDone(employee, prize, note, celebrate) {
     el('doneName').textContent = employee ? employee.name : '';
     el('doneDept').textContent = employee ? (employee.department || '') : '';
-    el('donePrize').textContent = prize ? (prize.name + (prize.unit ? ' (' + prize.unit + ')' : '')) : '-';
+    el('donePrize').textContent = prize ? prize.name : '-';
     el('doneNote').textContent = note || '';
     show('stateDone');
     if (celebrate) {
@@ -273,7 +273,7 @@
       el('prevSub').textContent = 'ของรางวัลที่คุณจะได้รับ';
       playGiftOpen('prevTrophy', prize, '🎁', true);
       setTimeout(() => {
-        el('prevPrize').textContent = prize.name + (prize.unit ? ' (' + prize.unit + ')' : '');
+        el('prevPrize').textContent = prize.name;
         el('prevPrize').classList.remove('hidden');
         el('confirmBtn').classList.remove('hidden');
         if (!reduceMotion && window.gsap) {
@@ -525,7 +525,7 @@
         if (data.error === 'emp_not_found') {
           el('entryError').textContent = 'ไม่พบรหัสพนักงานนี้ กรุณาตรวจสอบอีกครั้ง';
         } else if (data.error === 'employee_already_drawn') {
-          const p = data.prize ? (data.prize.name + (data.prize.unit ? ' ('+data.prize.unit+')' : '')) : '-';
+          const p = data.prize ? data.prize.name : '-';
           el('entryError').textContent = 'รหัสพนักงานนี้ได้รับรางวัลไปแล้ว: ' + p;
         } else if (data.error === 'badge_already_used') {
           el('entryError').textContent = 'ป้ายนี้ถูกใช้โดยคนอื่นไปแล้ว กรุณาติดต่อเจ้าหน้าที่';
