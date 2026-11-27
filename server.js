@@ -190,7 +190,7 @@ app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
 
   const { data: results, error: resultsErr } = await supabase
     .from('employees')
-    .select('emp_id,name,company,department,drawn_at,prizes(name,unit)')
+    .select('emp_id,name,company,department,drawn_at,prizes(id,name,unit)')
     .eq('drawn', true)
     .order('drawn_at', { ascending: false });
   if (resultsErr) throw resultsErr;
@@ -201,7 +201,7 @@ app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
     prizes,
     results: results.map(r => ({
       emp_id: r.emp_id, name: r.name, company: r.company, department: r.department,
-      drawn_at: r.drawn_at, prize_name: r.prizes?.name, unit: r.prizes?.unit,
+      drawn_at: r.drawn_at, prize_id: r.prizes?.id, prize_name: r.prizes?.name, unit: r.prizes?.unit,
     })),
   });
 }));
@@ -255,7 +255,7 @@ app.get('/live', (req, res) => {
 app.get('/api/live/recent', asyncRoute(async (req, res) => {
   const { data: results, error } = await supabase
     .from('employees')
-    .select('emp_id,name,company,department,drawn_at,prizes(name,unit)')
+    .select('emp_id,name,company,department,drawn_at,prizes(id,name,unit)')
     .eq('drawn', true)
     .order('drawn_at', { ascending: false })
     .limit(30);
@@ -265,7 +265,7 @@ app.get('/api/live/recent', asyncRoute(async (req, res) => {
     eventOpen: await isEventOpen(),
     results: results.map(r => ({
       emp_id: r.emp_id, name: r.name, company: r.company, department: r.department,
-      drawn_at: r.drawn_at, prize_name: r.prizes?.name, unit: r.prizes?.unit,
+      drawn_at: r.drawn_at, prize_id: r.prizes?.id, prize_name: r.prizes?.name, unit: r.prizes?.unit,
     })),
   });
 }));
