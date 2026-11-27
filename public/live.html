@@ -432,7 +432,7 @@
   // This wall only spotlights the grand prizes — everything else is still
   // drawn and recorded as normal (see /admin for the full results), it just
   // doesn't get a row or a reveal on this particular screen.
-  const FEATURED_PRIZE_IDS = new Set(['P002', 'P003', 'P004', 'P005']);
+  const FEATURED_PRIZE_IDS = new Set(['P002', 'P003', 'P004']);
 
   function addRow(r, animate) {
     if (!FEATURED_PRIZE_IDS.has(r.prize_id)) return;
