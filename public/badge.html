@@ -192,7 +192,6 @@
         <div class="prize-name hidden" id="prevPrize"></div>
       </div>
       <button id="confirmBtn" class="hidden" style="margin-top:20px;">ยืนยันรับรางวัล ✅</button>
-      <button class="secondary" id="backBtn">ไม่ใช่ฉัน / กรอกใหม่</button>
     </div>
 
     <!-- state: done (freshly confirmed, or re-scan of an already-claimed badge) -->
@@ -549,7 +548,6 @@
     }
   });
 
-  el('backBtn').addEventListener('click', () => { show('stateEntry'); setTimeout(() => el('empIdInput').focus(), 50); });
 
   el('confirmBtn').addEventListener('click', async () => {
     if (!lastPreview) return;
