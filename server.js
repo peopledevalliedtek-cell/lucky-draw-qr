@@ -37,10 +37,29 @@ app.get('/api/stream', (req, res) => {
 
 // ---------- Helpers ----------
 
+// Checks whether the draw is open. Also acts as the scheduled auto-open
+// "alarm clock": if an admin has set a future open time (settings row
+// `event_open_at`, an ISO timestamp) and that time has passed, this flips
+// `event_open` to '1' itself, broadcasts the change to connected admin/live
+// pages, and clears `event_open_at` (one-shot, same as a fired alarm) so a
+// later manual close doesn't get immediately re-opened by the same schedule.
 async function isEventOpen() {
-  const { data, error } = await supabase.from('settings').select('value').eq('key', 'event_open').maybeSingle();
+  const { data, error } = await supabase.from('settings').select('key,value').in('key', ['event_open', 'event_open_at']);
   if (error) throw error;
-  return !!data && data.value === '1';
+  const map = Object.fromEntries((data || []).map(r => [r.key, r.value]));
+  if (map.event_open === '1') return true;
+
+  if (map.event_open_at) {
+    const at = new Date(map.event_open_at);
+    if (!isNaN(at.getTime()) && at.getTime() <= Date.now()) {
+      const { error: upErr } = await supabase.from('settings').update({ value: '1' }).eq('key', 'event_open');
+      if (upErr) throw upErr;
+      await supabase.from('settings').delete().eq('key', 'event_open_at');
+      broadcast('event_state', { open: true });
+      return true;
+    }
+  }
+  return false;
 }
 
 async function getBadge(token) {
@@ -195,8 +214,11 @@ app.get('/api/admin/summary', basicAuth, asyncRoute(async (req, res) => {
     .order('drawn_at', { ascending: false });
   if (resultsErr) throw resultsErr;
 
+  const { data: schedRow } = await supabase.from('settings').select('value').eq('key', 'event_open_at').maybeSingle();
+
   res.json({
     eventOpen: await isEventOpen(),
+    eventOpenAt: schedRow ? schedRow.value : null,
     totalEmployees, drawnCount, totalBadges, claimedBadges,
     prizes,
     results: results.map(r => ({
@@ -210,8 +232,36 @@ app.post('/api/admin/event', basicAuth, asyncRoute(async (req, res) => {
   const open = !!req.body.open;
   const { error } = await supabase.from('settings').update({ value: open ? '1' : '0' }).eq('key', 'event_open');
   if (error) throw error;
+  // A manual toggle (either direction) always cancels any pending scheduled
+  // open — otherwise an admin who manually closes the event after a past
+  // schedule would see it immediately flip back open on the next check.
+  await supabase.from('settings').delete().eq('key', 'event_open_at');
   broadcast('event_state', { open });
   res.json({ ok: true, open });
+}));
+
+// Sets (or clears, with at: null) a one-shot scheduled auto-open time, so the
+// draw can open on time even if nobody is at the admin dashboard to flip the
+// switch. See isEventOpen() for how the schedule actually gets applied.
+app.post('/api/admin/schedule', basicAuth, asyncRoute(async (req, res) => {
+  const raw = req.body.at;
+  if (raw === null || raw === undefined || raw === '') {
+    await supabase.from('settings').delete().eq('key', 'event_open_at');
+    return res.json({ ok: true, at: null });
+  }
+  const at = new Date(raw);
+  if (isNaN(at.getTime())) return res.status(400).json({ error: 'invalid_date' });
+  const iso = at.toISOString();
+
+  const { data: existing } = await supabase.from('settings').select('key').eq('key', 'event_open_at').maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('settings').update({ value: iso }).eq('key', 'event_open_at');
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('settings').insert({ key: 'event_open_at', value: iso });
+    if (error) throw error;
+  }
+  res.json({ ok: true, at: iso });
 }));
 
 app.get('/api/admin/export.csv', basicAuth, asyncRoute(async (req, res) => {
@@ -274,3 +324,14 @@ app.listen(PORT, () => {
   console.log(`Lucky draw server running at http://localhost:${PORT}`);
   console.log(`Admin dashboard: http://localhost:${PORT}/admin  (user: ${ADMIN_USER})`);
 });
+
+// Proactively check the scheduled auto-open time every 20s while the process
+// is alive (e.g. kept awake by an open admin/live-wall SSE connection), so the
+// draw can flip open right on time instead of waiting for the next incoming
+// request. NOTE: Render's free tier puts the whole process to sleep after
+// ~15 minutes with no traffic — this interval (like everything else here)
+// only runs while the server is actually awake, so a schedule still needs
+// something to hit the site around that time to wake it up first.
+setInterval(() => {
+  isEventOpen().catch((e) => console.error('scheduled auto-open check failed:', e.message));
+}, 20000);

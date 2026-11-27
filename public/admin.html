@@ -44,6 +44,22 @@
   }
   .reset-btn:hover{ background:#fff6ee; }
   .reset-btn:disabled{ opacity:.6; cursor:default; }
+  .schedule-box{
+    background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 1px 4px rgba(0,0,0,0.08);
+    margin-bottom:20px; max-width:480px;
+  }
+  .schedule-box .title{ font-weight:700; font-size:15px; margin-bottom:2px; }
+  .schedule-box .desc{ font-size:13px; color:#666; margin-bottom:12px; }
+  .schedule-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .schedule-row input[type="datetime-local"]{
+    padding:8px 10px; border:1px solid #ddd; border-radius:8px; font-size:14px; flex:1; min-width:200px;
+  }
+  .schedule-row button{
+    padding:8px 14px; border-radius:8px; border:none; font-size:13px; cursor:pointer;
+  }
+  .sched-set{ background:#2d1b4e; color:#fff; }
+  .sched-clear{ background:#fff; border:1px solid #c0392b !important; color:#c0392b; }
+  .sched-current{ font-size:13px; color:#2d1b4e; margin-top:10px; background:#f4f0fb; border-radius:8px; padding:8px 10px; }
 </style>
 </head>
 <body>
@@ -59,6 +75,20 @@
     <div class="switch-label">
       <div class="title" id="eventStatusTitle">กำลังโหลด...</div>
       <div class="desc">เปิดเมื่อพร้อมให้พนักงานสแกน QR จับฉลาก (ช่วงเย็น)</div>
+    </div>
+  </div>
+
+  <div class="schedule-box">
+    <div class="title">⏰ ตั้งเวลาเปิดอัตโนมัติ</div>
+    <div class="desc">เผื่อผู้ดูแลระบบไม่อยู่หน้าจอพอดีเวลา ระบบจะเปิดให้เองตามเวลาที่ตั้งไว้</div>
+    <div class="schedule-row">
+      <input type="datetime-local" id="scheduleInput" />
+      <button class="sched-set" id="scheduleSetBtn">ตั้งเวลา</button>
+      <button class="sched-clear" id="scheduleClearBtn">ยกเลิก</button>
+    </div>
+    <div class="sched-current hidden" id="scheduleCurrent"></div>
+    <div class="desc" style="margin-top:10px; margin-bottom:0;">
+      ⚠️ ถ้าเซิร์ฟเวอร์ไม่มีใครเข้าใช้งานนานเกิน ~15 นาที ระบบ (Render free tier) จะ sleep และจะเปิดจริงทันทีที่มีคนเข้าเว็บครั้งแรกหลังถึงเวลา ไม่ใช่เป๊ะวินาที — แนะนำให้มีคนเปิดหน้านี้ หรือหน้า Live Wall ค้างไว้ก่อนเวลาที่ตั้งสัก 10-15 นาที เพื่อให้เซิร์ฟเวอร์ไม่ sleep
     </div>
   </div>
 
@@ -94,6 +124,16 @@ async function load() {
   document.getElementById('eventStatusTitle').textContent = data.eventOpen
     ? '🟢 ระบบเปิดอยู่ — พนักงานสแกนจับฉลากได้แล้ว'
     : '🔴 ระบบปิดอยู่ — พนักงานสแกนแล้วจะเห็น "ยังไม่เปิดให้จับฉลาก"';
+
+  const schedCurrent = document.getElementById('scheduleCurrent');
+  const schedInput = document.getElementById('scheduleInput');
+  if (data.eventOpenAt && !data.eventOpen) {
+    schedCurrent.classList.remove('hidden');
+    schedCurrent.textContent = '⏰ ตั้งเปิดอัตโนมัติไว้: ' + new Date(data.eventOpenAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+    if (!schedInput.dataset.touched) schedInput.value = toLocalDatetimeValue(data.eventOpenAt);
+  } else {
+    schedCurrent.classList.add('hidden');
+  }
 
   document.getElementById('stats').innerHTML = `
     <div class="stat"><div class="num">${data.totalEmployees}</div><div class="label">พนักงานทั้งหมด</div></div>
@@ -144,6 +184,40 @@ document.getElementById('resultRows').addEventListener('click', async (e) => {
     btn.disabled = false;
     btn.textContent = '↩️ รีเซ็ต';
   }
+});
+
+function toLocalDatetimeValue(iso) {
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+document.getElementById('scheduleSetBtn').addEventListener('click', async () => {
+  const input = document.getElementById('scheduleInput');
+  input.dataset.touched = '1';
+  if (!input.value) { alert('กรุณาเลือกวันและเวลาก่อน'); return; }
+  const at = new Date(input.value);
+  if (at.getTime() <= Date.now()) { alert('กรุณาเลือกเวลาที่ยังไม่ถึง (อนาคต)'); return; }
+  const ok = confirm('ยืนยันตั้งเวลาเปิดระบบอัตโนมัติที่ ' + at.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) + ' ?');
+  if (!ok) return;
+  await fetch('/api/admin/schedule', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ at: at.toISOString() }),
+  });
+  delete input.dataset.touched;
+  load();
+});
+
+document.getElementById('scheduleClearBtn').addEventListener('click', async () => {
+  const ok = confirm('ยกเลิกเวลาเปิดอัตโนมัติที่ตั้งไว้?');
+  if (!ok) return;
+  await fetch('/api/admin/schedule', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ at: null }),
+  });
+  delete document.getElementById('scheduleInput').dataset.touched;
+  document.getElementById('scheduleInput').value = '';
+  load();
 });
 
 function escapeHtml(s) {
